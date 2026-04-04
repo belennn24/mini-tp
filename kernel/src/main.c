@@ -31,4 +31,6 @@ void iniciar_config(){
 
     puerto_escucha = config_get_int_value(config, "PUERTO_ESCUCHA");
     log_level = log_level_from_string(config_get_string_value(config, "LOG_LEVEL")); // obtengo el log_level como string
+    ip_memoria = config_get_string_value(config, "IP_MEMORIA");
+    puerto_memoria = config_get_int_value(config, "PUERTO_MEMORIA");
 }

@@ -3,6 +3,10 @@
 
 char* ip_kernel;
 int puerto_kernel;
+char* ip_memoria;
+int puerto_memoria;
+int socket_memoria;
+int socket_kernel;
 t_log_level log_level;
 t_config* config;
 t_log* logger;
