@@ -6,6 +6,7 @@
 #include <string.h>
 #include <commons/config.h>
 #include <commons/log.h>
+#include <utils.h>
 
 void iniciar_config();
 #endif /* CPU_H_ */
