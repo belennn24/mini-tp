@@ -7,6 +7,9 @@ t_config* config;
 int socket_cpu;
 t_log_level log_level; // en el config se define como string, pero acá lo guardamos como t_log_level para usarlo con el logger
 t_log* logger;
+char *ip_memoria;
+int puerto_memoria;
+int socket_memoria;
 
 int main(int argc, char* argv[]) {
     saludar("kernel");
@@ -14,6 +17,7 @@ int main(int argc, char* argv[]) {
     logger = log_create("kernel.log", "KERNEL", 1, log_level);
     socket_servidor = iniciar_servidor(puerto_escucha); // kernel actúa como servidor
     socket_cpu = esperar_conexion(socket_servidor, logger); // cpu se conecta como cliente
+    socket_memoria = crear_conexion(ip_memoria, puerto_memoria);
     log_info(logger, "CPU se conecto al kernel :D");
     return 0;
 }
