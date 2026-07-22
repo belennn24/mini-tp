@@ -6,6 +6,7 @@ t_config *config;
 int puerto_escucha;
 int socket_servidor;
 int socket_cpu;
+int socket_kernel;
 int socket_memoria;
 int tam_memoria;
 void* memoria_fisica;
@@ -17,8 +18,11 @@ int main(int argc, char *argv[])
     logger = log_create("memoria.log", "MEMORIA", 0, LOG_LEVEL_INFO);
     socket_servidor = iniciar_servidor(puerto_escucha);     // memoria actúa como servidor
     socket_cpu = esperar_conexion(socket_servidor, logger); // cpu se conecta como cliente
-    socket_memoria = crear_conexion(ip_memoria, puerto_memoria); 
-    memoria_fisica = malloc(tam_memoria); //reservo memoria (dinámica)
+    log_info(logger, "CPU se conecto a la memoria :D");
+    socket_kernel= esperar_conexion(socket_servidor, logger); // kernel se conecta como cliente
+    log_info(logger, "Kernel se conecto a la memoria :D");
+    //socket_memoria = crear_conexion(ip_memoria, puerto_memoria); 
+    //memoria_fisica = malloc(tam_memoria); //reservo memoria (dinámica)
     return 0;
 }
 

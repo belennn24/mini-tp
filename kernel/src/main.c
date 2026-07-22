@@ -1,4 +1,3 @@
-
 #include "kernel.h"
 
 int socket_servidor;
