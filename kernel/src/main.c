@@ -14,8 +14,7 @@ t_queue *cola_ready;
 sem_t sem_new;
 sem_t sem_ready;
 sem_t sem_cpu_disponible;
-pthread_mutex_t mutex_cpu;
-
+pthread_mutex_t mutex_ready;
 
 int main(int argc, char *argv[])
 {
@@ -57,6 +56,8 @@ void iniciar_semaforos()
 {
     sem_init(&sem_new, NULL, 1);
     sem_init(&sem_ready, NULL, 1);
+    sem_init(&sem_cpu_disponible, NULL, 1); // la cpu empieza libre
+    pthread_mutex_init(&mutex_cpu, NULL, 1);
 }
 
 void *planificador_largo_plazo(void *args)
@@ -81,7 +82,9 @@ void *planificador_largo_plazo(void *args)
         if (rta_memoria == PROCESO_CARGADO)
         {
             log_info(logger, "Se agrega proceso %d a la cola ready", p->pid);
+            pthread_mutex_lock(&mutex_ready);
             queue_push(cola_ready, queue_pop(cola_new));
+            pthread_mutex_unlock(&mutex_ready);
             sem_post(&sem_ready);
         }
         else if (rta_memoria == ESPACIO_INSUFICIENTE)
@@ -97,13 +100,21 @@ void *planificador_corto_plazo(void *args)
     {
         sem_wait(&sem_ready);
         sem_wait(&sem_cpu_disponible);
-        pthread_mutex_lock(&mutex_cpu);
+        pthread_mutex_lock(&mutex_ready);
         proceso *p = queue_pop(cola_ready);
-        pthread_mutex_unlock(&mutex_cpu);
+        pthread_mutex_unlock(&mutex_ready);
         t_paquete *paquete = crear_paquete();
         agregar_a_paquete(paquete, &(p->pid), sizeof(int));
         agregar_a_paquete(paquete, &(p->tamanio), sizeof(int));
         enviar_paquete(socket_cpu, paquete);
         eliminar_paquete(paquete);
+        free(p->codigo);
+        free(p);
+    }
+}
+
+void* atender_cpu(void* args) {
+    while(1){
+        
     }
 }
