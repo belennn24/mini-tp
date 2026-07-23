@@ -210,9 +210,17 @@ void identificar_cliente()
             log_info(logger, "CPU se conecto a la memoria :D");
         }
     }
+
+    pthread_t hilo_cpu;
+    pthread_t hilo_kernel;
+
+    pthread_create(&hilo_cpu, NULL, atender_cpu, NULL);
+    pthread_create(&hilo_kernel, NULL, atender_kernel, NULL);
+    pthread_detach(hilo_cpu);
+    pthread_join(hilo_kernel, NULL); // hay que unirse a algún hilo; sino, terminaría con 3 hilos y se volvería al main, finalizando con la ejecución del programa
 }
 
-void atender_cpu()
+void *atender_cpu(void *args) // la firma void* f(void* args) es requerida por la biblioteca pthreads
 {
     while (1)
     {
@@ -229,7 +237,7 @@ void atender_cpu()
     }
 }
 
-void atender_kernel()
+void *atender_kernel(void *args)
 {
     while (1)
     {
