@@ -17,6 +17,7 @@ int main(int argc, char* argv[]) {
     // cpu cliente de kernel y de memoria
     socket_kernel = crear_conexion(ip_kernel, puerto_kernel);
     socket_memoria = crear_conexion(ip_memoria, puerto_memoria);
+    enviar_operacion(socket_memoria, CPU);
 
     return 0;
 }

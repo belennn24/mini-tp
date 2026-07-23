@@ -17,6 +17,7 @@ int main(int argc, char* argv[]) {
     socket_servidor = iniciar_servidor(puerto_escucha); // kernel actúa como servidor
     socket_cpu = esperar_conexion(socket_servidor, logger); // cpu se conecta como cliente
     socket_memoria = crear_conexion(ip_memoria, puerto_memoria);
+    enviar_operacion(socket_memoria, KERNEL);
     log_info(logger, "CPU se conecto al kernel :D");
     return 0;
 }
