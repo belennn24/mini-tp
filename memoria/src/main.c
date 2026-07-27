@@ -22,16 +22,29 @@ int main(int argc, char *argv[])
     saludar("memoria");
     iniciar_config();
     logger = log_create("memoria.log", "MEMORIA", 0, LOG_LEVEL_INFO);
-    socket_servidor = iniciar_servidor(puerto_escucha); // memoria actúa como servidor
 
     memoria_fisica = malloc(tam_memoria); // reservo memoria (dinámica)
 
     crear_bitmap();
     de_pid_a_tabla = dictionary_create();
-    // escribir_memoria(500,"Holaa");
-    // leer_memoria(500,4);
     identificar_cliente();
     return 0;
+}
+
+void iniciar_config()
+{
+    config = config_create("memoria.config");
+    if (config == NULL) {
+        config = config_create("src/memoria.config");
+    }
+    if (config == NULL) {
+        fprintf(stderr, "No se pudo cargar memoria.config\n");
+        exit(EXIT_FAILURE);
+    }
+    log_level = log_level_from_string(config_get_string_value(config, "LOG_LEVEL"));
+    puerto_escucha = config_get_int_value(config, "PUERTO_ESCUCHA");
+    tam_memoria = config_get_int_value(config, "TAM_MEMORIA");
+    tam_pagina = config_get_int_value(config, "TAM_PAGINA");
 }
 
 char *leer_memoria(int direccion, int tamanio)
@@ -50,14 +63,7 @@ void escribir_memoria(int direccion, char *contenido)
     memccpy(memoria_fisica + direccion, contenido, '\0', strlen(contenido));
     log_info(logger, "Escritura realizada. Direccion %d, contenido %s", direccion, contenido);
 }
-void iniciar_config()
-{
-    config = config_create("memoria.config");
-    log_level = log_level_from_string(config_get_string_value(config, "LOG_LEVEL"));
-    puerto_escucha = config_get_int_value(config, "PUERTO_ESCUCHA");
-    tam_memoria = config_get_int_value(config, "TAM_MEMORIA");
-    tam_pagina = config_get_int_value(config, "TAM_PAGINA");
-}
+
 
 void crear_bitmap()
 {
@@ -195,33 +201,37 @@ int paginaFisicaDeLogica(int pid, int pagina_logica)
 void identificar_cliente()
 {
     socket_servidor = iniciar_servidor(puerto_escucha);
-    for (int i = 0; i < 2; i++)
-    {
-        int socket_misterioso = esperar_conexion(socket_servidor);
-        int op_code = recibir_operacion(socket_misterioso);
-        if (op_code == KERNEL)
-        {
-            socket_kernel = socket_misterioso;
-            log_info(logger, "Kernel se conecto a la memoria :D");
-        }
-        else if (op_code == CPU)
-        {
-            socket_cpu = socket_misterioso;
-            log_info(logger, "CPU se conecto a la memoria :D");
-        }
-    }
+    log_info(logger, "Memoria lista para recibir clientes");
 
     pthread_t hilo_cpu;
     pthread_t hilo_kernel;
 
-    pthread_create(&hilo_cpu, NULL, atender_cpu, NULL);
-    pthread_create(&hilo_kernel, NULL, atender_kernel, NULL);
-    pthread_detach(hilo_cpu);
-    pthread_join(hilo_kernel, NULL); // hay que unirse a algún hilo; sino, terminaría con 3 hilos y se volvería al main, finalizando con la ejecución del programa
+    while(socket_cpu == 0 || socket_kernel == 0) {
+        int socket_cliente = esperar_conexion(socket_servidor, logger);
+        int op_code = recibir_operacion(socket_cliente);
+        if (op_code == KERNEL)
+        {
+            socket_kernel = socket_cliente;
+            log_info(logger, "Kernel se conecto a la memoria :D");
+            pthread_create(&hilo_kernel, NULL, atender_kernel, NULL);
+            pthread_detach(hilo_kernel);
+        }
+        else if (op_code == CPU)
+        {
+            socket_cpu = socket_cliente;
+            log_info(logger, "CPU se conecto a la memoria :D");
+            pthread_create(&hilo_cpu, NULL, atender_cpu, NULL);
+            pthread_detach(hilo_cpu);
+        }
+    }
+    // Para mantener el proceso principal vivo, podrías usar un semáforo o simplemente un join en uno de los hilos si sabes cuál será el último en terminar.
+    // Por ahora, una espera infinita simple servirá para que el servidor no muera.
+    while(1) sleep(10);
 }
 
 void *atender_cpu(void *args) // la firma void* f(void* args) es requerida por la biblioteca pthreads
 {
+    enviar_operacion(socket_cpu, tam_pagina);
     while (1)
     {
         int op_code = recibir_operacion(socket_cpu);

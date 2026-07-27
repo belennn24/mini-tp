@@ -24,5 +24,8 @@ void crear_bitmap();
 char* de_int_a_string(int ent);
 void liberar_memoria_de_proceso(int pid);
 int paginaFisicaDeLogica(int pid, int pagina_logica);
+void identificar_cliente();
+void* atender_cpu(void* args);
+void* atender_kernel(void* args);
 
 #endif /* MEMORIA_H_ */

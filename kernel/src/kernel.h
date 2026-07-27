@@ -21,5 +21,6 @@ void *planificador_largo_plazo(void *args);
 void *planificador_corto_plazo(void *args);
 void* atender_cpu(void* args);
 void iniciar_proceso(int tam, char* codigo);
+void finalizar_proceso(int pid);
 
 #endif /* KERNEL_H_ */

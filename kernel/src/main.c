@@ -20,7 +20,7 @@ pthread_mutex_t mutex_new;
 int main(int argc, char *argv[])
 {
     char *primer_codigo = strdup(argv[1]);
-    int primer tamanio = atoi(argv[2]);
+    int primer_tamanio = atoi(argv[2]);
     saludar("kernel");
     iniciar_config();
     logger = log_create("kernel.log", "KERNEL", 1, log_level);
@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
 
     cola_new = queue_create();
     cola_ready = queue_create();
-    iniciar_proceso(primer_codigo, primer_tamanio);
+    iniciar_proceso(primer_tamanio, primer_codigo);
     pthread_t hilo_largo_plazo;
     pthread_t hilo_corto_plazo;
     pthread_t hilo_cpu;
@@ -135,7 +135,7 @@ void *planificador_corto_plazo(void *args)
         pthread_mutex_unlock(&mutex_ready);
         t_paquete *paquete = crear_paquete();
         agregar_a_paquete(paquete, &(p->pid), sizeof(int));
-        agregar_a_paquete(paquete, &(p->tamanio), strlen(p->codigo) + 1);
+        agregar_a_paquete(paquete, p->codigo, strlen(p->codigo) + 1);
         enviar_paquete(socket_cpu, paquete);
         log_info(logger, "Proceso %d enviado a EXEC", p->pid);
         eliminar_paquete(paquete);
@@ -157,13 +157,13 @@ void *atender_cpu(void *args)
         {
         case INIT_PROC:
             lista_paquete = recibir_paquete(socket_cpu);
-            tam = *(int *)list_get(lista_paquete, 1);
-            codigo = strdup((char *)list_get(lista_paquete, 2));
-            iniciar_proceso(tam, codigo);
+            tam = *(int *)list_get(lista_paquete, 0);
+            codigo = strdup((char *)list_get(lista_paquete, 1));
+            iniciar_proceso(tam, codigo); // Asumiendo que iniciar_proceso toma tam y codigo
             list_destroy_and_destroy_elements(lista_paquete, free);
             break;
         case FIN_PROC:
-            pid = recibir_mensaje(socket_cpu);
+            pid = recibir_operacion(socket_cpu); // Asumiendo que el PID se envía como una operación simple
             finalizar_proceso(pid);
             break;
         }
@@ -180,16 +180,19 @@ void iniciar_proceso(int tam, char *codigo)
     log_info(logger, "Se agrega proceso %d a la cola new", p->pid);
     pthread_mutex_lock(&mutex_new);
     queue_push(cola_new, p);
-    pthread_mutex_unlock(&mutex_new)
-        sem_post(&sem_new);
+    pthread_mutex_unlock(&mutex_new);
+    sem_post(&sem_new);
     pid++;
 }
 
 void finalizar_proceso(int pid)
 {
     enviar_operacion(socket_memoria, DESCARGAR_PROCESO);
-    enviar_paquete(socket_memoria, pid);
-    if (recibir_operacion(socket_memoria) == ESPACIO_LIBERADO)
+    t_paquete* paquete = crear_paquete();
+    agregar_a_paquete(paquete, &pid, sizeof(int));
+    enviar_paquete(socket_memoria, paquete);
+    eliminar_paquete(paquete);
+    if (recibir_operacion(socket_memoria) == OK)
     {
         log_info(logger, "Memoria liberada para el proceso %d", pid);
         sem_post(&sem_cpu_disponible);
