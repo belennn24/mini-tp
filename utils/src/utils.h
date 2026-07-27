@@ -42,7 +42,10 @@ typedef enum
 typedef enum
 {
     PROCESO_CARGADO,
-    ESPACIO_INSUFICIENTE
+    ESPACIO_INSUFICIENTE,
+    INIT_PROC,
+    FIN_PROC,
+    PROCESO_LIBERADO
 } op_code_kernel;
 
 typedef enum
