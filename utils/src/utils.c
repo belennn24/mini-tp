@@ -1,5 +1,7 @@
 #include "utils.h"
 
+void crear_buffer(t_paquete *paquete);
+extern t_log* logger;
 
 void saludar(char* quien) {
     printf("Hola desde %s!!\n", quien);
@@ -98,6 +100,12 @@ void enviar_operacion(int socket_cliente, int op_code)
 	}
 }
 
+void crear_buffer(t_paquete *paquete)
+{
+    paquete->buffer = malloc(sizeof(t_buffer));
+    paquete->buffer->size = 0;
+    paquete->buffer->stream = NULL;
+}
 t_paquete *crear_paquete(void)
 {
 	t_paquete *paquete = malloc(sizeof(t_paquete));
@@ -116,6 +124,22 @@ void agregar_a_paquete(t_paquete *paquete, void *valor, int tamanio)
 	paquete->buffer->size += tamanio + sizeof(int);
 }
 
+void enviar_paquete(int socket_cliente, t_paquete *paquete)
+{
+    int bytes = paquete->buffer->size + 2 * sizeof(int);
+    void *a_enviar = malloc(bytes);
+    int desplazamiento = 0;
+
+    memcpy(a_enviar + desplazamiento, &(paquete->codigo_operacion), sizeof(int));
+    desplazamiento += sizeof(int);
+    memcpy(a_enviar + desplazamiento, &(paquete->buffer->size), sizeof(int));
+    desplazamiento += sizeof(int);
+    memcpy(a_enviar + desplazamiento, paquete->buffer->stream, paquete->buffer->size);
+
+    send(socket_cliente, a_enviar, bytes, 0);
+
+    free(a_enviar);
+}
 
 void eliminar_paquete(t_paquete *paquete)
 {
@@ -154,12 +178,12 @@ void *recibir_buffer(int *size, int socket_cliente)
     return buffer;
 }
 
-void recibir_mensaje(int socket_cliente)
+char* recibir_mensaje(int socket_cliente)
 {
     int size;
     char *buffer = recibir_buffer(&size, socket_cliente);
-    log_info(logger, "Me llego el mensaje %s", buffer);
-    free(buffer);
+    //log_info(logger, "Me llego el mensaje %s", buffer);
+    return buffer;
 }
 
 t_list *recibir_paquete(int socket_cliente)
