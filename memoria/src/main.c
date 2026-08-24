@@ -34,10 +34,12 @@ int main(int argc, char *argv[])
 void iniciar_config()
 {
     config = config_create("memoria.config");
-    if (config == NULL) {
+    if (config == NULL)
+    {
         config = config_create("src/memoria.config");
     }
-    if (config == NULL) {
+    if (config == NULL)
+    {
         fprintf(stderr, "No se pudo cargar memoria.config\n");
         exit(EXIT_FAILURE);
     }
@@ -55,6 +57,7 @@ char *leer_memoria(int direccion, int tamanio)
     // 2° arg: origen (de donde quiero copiar) memoria_fisica + direccion significa empezar a leer desde el byte direccion dentro del bloque de memoria física.
     // 3° arg: cantidad de bytes a copiar
     lectura[tamanio] = '\0'; // agrego el carácter de fin de string
+    log_info(logger, "Lectura realizada. Direccion %d, contenido %s", direccion, lectura);
     return lectura;
 }
 
@@ -63,7 +66,6 @@ void escribir_memoria(int direccion, char *contenido)
     memccpy(memoria_fisica + direccion, contenido, '\0', strlen(contenido));
     log_info(logger, "Escritura realizada. Direccion %d, contenido %s", direccion, contenido);
 }
-
 
 void crear_bitmap()
 {
@@ -206,7 +208,8 @@ void identificar_cliente()
     pthread_t hilo_cpu;
     pthread_t hilo_kernel;
 
-    while(socket_cpu == 0 || socket_kernel == 0) {
+    while (socket_cpu == 0 || socket_kernel == 0)
+    {
         int socket_cliente = esperar_conexion(socket_servidor, logger);
         int op_code = recibir_operacion(socket_cliente);
         if (op_code == KERNEL)
@@ -226,7 +229,8 @@ void identificar_cliente()
     }
     // Para mantener el proceso principal vivo, podrías usar un semáforo o simplemente un join en uno de los hilos si sabes cuál será el último en terminar.
     // Por ahora, una espera infinita simple servirá para que el servidor no muera.
-    while(1) sleep(10);
+    while (1)
+        sleep(10);
 }
 
 void *atender_cpu(void *args) // la firma void* f(void* args) es requerida por la biblioteca pthreads
@@ -235,16 +239,55 @@ void *atender_cpu(void *args) // la firma void* f(void* args) es requerida por l
     while (1)
     {
         int op_code = recibir_operacion(socket_cpu);
+        if (op_code == -1)
+            break;
         switch (op_code)
         {
         case LEER:
+        {
+            t_list *paquete = recibir_paquete(socket_cpu);
+            if (list_size(paquete) != 3 ||
+                list_get(paquete, 1) == NULL ||
+                list_get(paquete, 2) == NULL)
+            {
+                log_error(logger, "Paquete LEER invalido");
+                list_destroy_and_destroy_elements(paquete, free);
+                break;
+            }
+
+            int direccion = *(int *)list_get(paquete, 1);
+            int tamanio = *(int *)list_get(paquete, 2);
+            char *lectura = leer_memoria(direccion, tamanio);
+            enviar_operacion(socket_cpu, RTA_LECTURA);
+            enviar_mensaje(socket_cpu, lectura);
+            free(lectura);
+            list_destroy_and_destroy_elements(paquete, free);
             break;
+        }
         case ESCRIBIR:
+        {
+            t_list *paquete = recibir_paquete(socket_cpu);
+            if (list_size(paquete) != 3 ||
+                list_get(paquete, 1) == NULL ||
+                list_get(paquete, 2) == NULL)
+            {
+                log_error(logger, "Paquete ESCRIBIR invalido");
+                list_destroy_and_destroy_elements(paquete, free);
+                break;
+            }
+
+            int direccion = *(int *)list_get(paquete, 1);
+            char *contenido = list_get(paquete, 2);
+            escribir_memoria(direccion, contenido);
+            enviar_operacion(socket_cpu, OK);
+            list_destroy_and_destroy_elements(paquete, free);
             break;
+        }
         case PAGINA_FISICA:
             break;
         }
     }
+    return NULL;
 }
 
 void *atender_kernel(void *args)
@@ -255,9 +298,45 @@ void *atender_kernel(void *args)
         switch (op_code)
         {
         case CARGAR_PROCESO:
+        {
+            t_list *paquete = recibir_paquete(socket_kernel);
+            if (list_size(paquete) != 2 ||
+                list_get(paquete, 0) == NULL ||
+                list_get(paquete, 1) == NULL)
+            {
+                log_error(logger, "Paquete CARGAR_PROCESO invalido");
+                list_destroy_and_destroy_elements(paquete, free);
+                enviar_operacion(socket_kernel, ESPACIO_INSUFICIENTE);
+                continue;
+            }
+            int pid = *(int *)list_get(paquete, 0);
+            int tamanio = *(int *)list_get(paquete, 1);
+
+            if (reservar_memoria_para_proceso(pid, tamanio))
+            {
+                enviar_operacion(socket_kernel, PROCESO_CARGADO);
+            }
+            else
+            {
+                enviar_operacion(socket_kernel, ESPACIO_INSUFICIENTE);
+            }
+
+            list_destroy_and_destroy_elements(paquete, free);
             break;
+        }
         case DESCARGAR_PROCESO:
+        {
+            int pid = recibir_operacion(socket_kernel);
+            if (pid < 0)
+            {
+                log_error(logger, "PID invalido en DESCARGAR_PROCESO");
+                enviar_operacion(socket_kernel, ESPACIO_INSUFICIENTE);
+                continue;
+            }
+            liberar_memoria_de_proceso(pid);
+            enviar_operacion(socket_kernel, OK);
             break;
+        }
         }
     }
 }

@@ -16,9 +16,16 @@ sem_t sem_ready;
 sem_t sem_cpu_disponible;
 pthread_mutex_t mutex_ready;
 pthread_mutex_t mutex_new;
+pthread_mutex_t mutex_memoria;
 
 int main(int argc, char *argv[])
 {
+    if (argc < 3)
+    {
+        fprintf(stderr, "Error: Faltan argumentos. Uso: %s <ruta_script> <tamanio>\n", argv[0]);
+        return EXIT_FAILURE;
+    }
+
     char *primer_codigo = strdup(argv[1]);
     int primer_tamanio = atoi(argv[2]);
     saludar("kernel");
@@ -69,11 +76,12 @@ void iniciar_config()
 
 void iniciar_semaforos()
 {
-    sem_init(&sem_new, 0, 1);
-    sem_init(&sem_ready, 0, 1);
+    sem_init(&sem_new, 0, 0);
+    sem_init(&sem_ready, 0, 0);
     sem_init(&sem_cpu_disponible, 0, 1); // la cpu empieza libre
     pthread_mutex_init(&mutex_ready, NULL);
     pthread_mutex_init(&mutex_new, NULL);
+    pthread_mutex_init(&mutex_memoria, NULL);
 }
 
 void *planificador_largo_plazo(void *args)
@@ -82,7 +90,7 @@ void *planificador_largo_plazo(void *args)
     {
         sem_wait(&sem_new);
         pthread_mutex_lock(&mutex_new);
-        proceso *p = queue_peek(cola_new); // Solo espiamos para no quitarlo aún
+        proceso *p = queue_peek(cola_new);
         pthread_mutex_unlock(&mutex_new);
 
         if (p == NULL)
@@ -96,10 +104,13 @@ void *planificador_largo_plazo(void *args)
         paquete->codigo_operacion = CARGAR_PROCESO;
         agregar_a_paquete(paquete, &(p->pid), sizeof(int));
         agregar_a_paquete(paquete, &(p->tamanio), sizeof(int));
+
+        pthread_mutex_lock(&mutex_memoria);
         enviar_paquete(socket_memoria, paquete);
         eliminar_paquete(paquete);
 
         int rta_memoria = recibir_operacion(socket_memoria);
+        pthread_mutex_unlock(&mutex_memoria);
         if (rta_memoria == PROCESO_CARGADO)
         {
             log_info(logger, "Se agrega proceso %d a la cola ready", p->pid);
@@ -118,8 +129,8 @@ void *planificador_largo_plazo(void *args)
         {
             log_info(logger, "No hay espacio en Memoria para procedo %d de tamanio %d", p->pid, p->tamanio);
             log_info(logger, "Planificador de Largo Plazo pausado por falta de memoria. Reintentará en 5 segundos...");
-            sleep(5);           // Pausamos para no saturar a la memoria con peticiones.
-            sem_post(&sem_new); 
+            sleep(5); // Pausamos para no saturar a la memoria con peticiones.
+            sem_post(&sem_new);
         }
     }
 }
@@ -133,13 +144,27 @@ void *planificador_corto_plazo(void *args)
         pthread_mutex_lock(&mutex_ready);
         proceso *p = queue_pop(cola_ready);
         pthread_mutex_unlock(&mutex_ready);
+        if (p == NULL)
+            continue;
         t_paquete *paquete = crear_paquete();
+        paquete->codigo_operacion = PROCESO;
         agregar_a_paquete(paquete, &(p->pid), sizeof(int));
-        agregar_a_paquete(paquete, p->codigo, strlen(p->codigo) + 1);
+        if (p->codigo != NULL)
+        {
+            agregar_a_paquete(paquete, p->codigo, strlen(p->codigo) + 1);
+        }
+        else
+        {
+            char *vacio = "";
+            agregar_a_paquete(paquete, vacio, strlen(vacio) + 1);
+        }
         enviar_paquete(socket_cpu, paquete);
         log_info(logger, "Proceso %d enviado a EXEC", p->pid);
         eliminar_paquete(paquete);
-        free(p->codigo);
+        if (p->codigo != NULL)
+        {
+            free(p->codigo);
+        }
         free(p);
     }
 }
@@ -149,6 +174,8 @@ void *atender_cpu(void *args)
     while (1)
     {
         int op_code = recibir_operacion(socket_cpu);
+        if (op_code == -1)
+            break;
         t_list *lista_paquete;
         int pid;
         int tam;
@@ -157,9 +184,17 @@ void *atender_cpu(void *args)
         {
         case INIT_PROC:
             lista_paquete = recibir_paquete(socket_cpu);
+            if (list_size(lista_paquete) != 2 ||
+                list_get(lista_paquete, 0) == NULL ||
+                list_get(lista_paquete, 1) == NULL)
+            {
+                log_error(logger, "Paquete INIT_PROC invalido");
+                list_destroy_and_destroy_elements(lista_paquete, free);
+                break;
+            }
             tam = *(int *)list_get(lista_paquete, 0);
             codigo = strdup((char *)list_get(lista_paquete, 1));
-            iniciar_proceso(tam, codigo); // Asumiendo que iniciar_proceso toma tam y codigo
+            iniciar_proceso(tam, codigo);
             list_destroy_and_destroy_elements(lista_paquete, free);
             break;
         case FIN_PROC:
@@ -168,6 +203,7 @@ void *atender_cpu(void *args)
             break;
         }
     }
+    return NULL;
 }
 
 void iniciar_proceso(int tam, char *codigo)
@@ -187,12 +223,12 @@ void iniciar_proceso(int tam, char *codigo)
 
 void finalizar_proceso(int pid)
 {
+    pthread_mutex_lock(&mutex_memoria);
     enviar_operacion(socket_memoria, DESCARGAR_PROCESO);
-    t_paquete* paquete = crear_paquete();
-    agregar_a_paquete(paquete, &pid, sizeof(int));
-    enviar_paquete(socket_memoria, paquete);
-    eliminar_paquete(paquete);
-    if (recibir_operacion(socket_memoria) == OK)
+    enviar_operacion(socket_memoria, pid);
+    int respuesta = recibir_operacion(socket_memoria);
+    pthread_mutex_unlock(&mutex_memoria);
+    if (respuesta == OK)
     {
         log_info(logger, "Memoria liberada para el proceso %d", pid);
         sem_post(&sem_cpu_disponible);

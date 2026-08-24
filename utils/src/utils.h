@@ -57,6 +57,7 @@ void enviar_operacion(int socket_cliente, int op_code);
 t_paquete *crear_paquete(void);
 void agregar_a_paquete(t_paquete *paquete, void *valor, int tamanio);
 void enviar_paquete(int socket_cliente, t_paquete *paquete);
+void enviar_mensaje(int socket_cliente, const char *mensaje);
 void eliminar_paquete(t_paquete *paquete);
 void liberar_conexion(int socket_cliente);
 int recibir_operacion(int socket_cliente);
