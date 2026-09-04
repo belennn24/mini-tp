@@ -17,7 +17,7 @@ sem_t sem_cpu_disponible;
 pthread_mutex_t mutex_ready;
 pthread_mutex_t mutex_new;
 pthread_mutex_t mutex_memoria;
-
+//hola
 int main(int argc, char *argv[])
 {
     if (argc < 3)
